@@ -7,6 +7,8 @@
 name: Compile mainline stable kernel  # 工作流名称，显示在 Actions 页面列表
 
 on:  # 触发器：定义工作流在哪些事件下运行
+  schedule:  # 定时自动编译（cron 使用 UTC）
+    - cron: "0 20 * * 0"  # 每周日 20:00 UTC = 每周一 04:00（北京时间）
   repository_dispatch:  # 允许外部仓库/Webhook 通过 GitHub API 触发（上游内核更新后自动编译）
   workflow_dispatch:  # 允许在 Actions 页面手动 Run workflow 并填写 inputs
     inputs:  # 手动触发的输入参数（每项对应表单一个控件）
@@ -124,7 +126,7 @@ jobs:  # 任务集合
   build:  # 第二个 job：真正执行内核编译
     needs: setup  # 依赖 setup，需其完成后运行
     runs-on: ubuntu-26.04-arm  # 同样使用 ARM64 runner（本地 arm64 编译）
-    if: ${{ github.event.repository.owner.id == github.event.sender.id }}  # 安全限制：仅仓库所有者本人触发时才执行，防止 fork 滥用
+    if: ${{ github.event_name == 'schedule' || github.event.repository.owner.id == github.event.sender.id }}  # 安全限制：仅仓库所有者本人或定时任务触发时执行，防止 fork 滥用
     permissions:  # 声明 GITHUB_TOKEN 权限范围
       contents: write  # 允许写仓库内容（创建/更新 Release）
 
