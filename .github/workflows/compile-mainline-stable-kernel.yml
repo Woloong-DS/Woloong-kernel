@@ -206,6 +206,53 @@ jobs:  # 任务集合
           restore-keys: |  # 精确 key 未命中时按此前缀恢复旧缓存
             kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-
 
+      - name: Verify kernel config [ ${{ matrix.kernel_version }} ]  # 步骤5.5：编译前校验 Klipper 必需项（CAN/gs_usb 等）
+        run: |
+          set -o pipefail
+          kc="${{ inputs.kernel_config }}"
+          if [[ -z "${kc}" || "${kc}" == "false" ]]; then
+            echo "kernel_config=${kc}（未启用自定义配置），跳过必需项校验。"
+            exit 0
+          fi
+          req="kernel-config/required-options.conf"   # 必需项清单（由本仓库维护）
+          if [[ ! -f "${req}" ]]; then
+            echo "::warning::未找到 ${req}，无法校验 Klipper 必需项。"
+            exit 0
+          fi
+          ver="$(echo "${{ matrix.kernel_version }}" | awk -F. '{print $1"."$2}')"
+          cfg="${kc}/config-${ver}"
+          scope="$(awk -F'=' '/^SCOPE=/{print $2; exit}' "${req}" | tr -d ' ')"
+          in_scope=no
+          for s in ${scope}; do [[ "${s}" == "${ver}" ]] && in_scope=yes; done
+          echo "目标内核版本: ${ver} | 配置模板: ${cfg} | 强制校验范围(SCOPE): ${scope:-无} | 本版本在范围内: ${in_scope}"
+          if [[ ! -f "${cfg}" ]]; then
+            if [[ "${in_scope}" == "yes" ]]; then
+              echo "::error::缺少 ${cfg}，编译会静默改用官方配置，Klipper 功能无法保证。请先准备该版本配置模板。"
+              exit 1
+            fi
+            echo "::warning::缺少 ${cfg}，本次将使用官方配置（不在强制校验范围内）。"
+            exit 0
+          fi
+          missing=0
+          while IFS= read -r line; do
+            [[ -z "${line}" || "${line}" == \#* || "${line}" == SCOPE=* ]] && continue
+            name="${line%%=*}"
+            if grep -q "^${name}=" "${cfg}"; then
+              echo "OK    ${name}=$(grep -m1 "^${name}=" "${cfg}" | cut -d= -f2-)"
+            else
+              echo "缺失  ${line}"
+              missing=$((missing + 1))
+            fi
+          done < "${req}"
+          if [[ "${missing}" -gt 0 ]]; then
+            if [[ "${in_scope}" == "yes" ]]; then
+              echo "::error::${cfg} 缺少 ${missing} 个 Klipper 必需项（见上），已阻止编译。"
+              exit 1
+            fi
+            echo "::warning::${cfg} 缺少 ${missing} 个必需项（不在强制校验范围内，继续编译）。"
+          else
+            echo "全部必需项已启用，继续编译。"
+          fi
       - name: Compile the kernel [ ${{ matrix.kernel_version }} ]  # 步骤6：编译内核（核心步骤）
         uses: ophub/amlogic-s9xxx-armbian@main  # 调用 ophub 内核编译 Action，核心逻辑在该仓库
         if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}  # 仅当前面磁盘步骤成功且未被取消时执行
