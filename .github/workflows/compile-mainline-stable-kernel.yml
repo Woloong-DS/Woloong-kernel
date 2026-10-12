@@ -8,7 +8,7 @@ name: Compile mainline stable kernel  # 工作流名称，显示在 Actions 页�
 
 on:  # 触发器：定义工作流在哪些事件下运行
   schedule:  # 定时自动编译（cron 使用 UTC）
-    - cron: "0 20 * * 0"  # 每周日 20:00 UTC = 每周一 04:00（北京时间）
+    - cron: "0 20 1,16 * *"  # 每月 1 日、16 日 20:00 UTC = 次日 04:00（北京时间），即半月一次
   repository_dispatch:  # 允许外部仓库/Webhook 通过 GitHub API 触发（上游内核更新后自动编译）
   workflow_dispatch:  # 允许在 Actions 页面手动 Run workflow 并填写 inputs
     inputs:  # 手动触发的输入参数（每项对应表单一个控件）
@@ -104,6 +104,12 @@ on:  # 触发器：定义工作流在哪些事件下运行
           - kernel-config/release/stable  # 使用仓库内该目录下的 .config
           - false  # 不使用自定义配置，走内核默认/自动配置
 
+      sync_config:  # 是否在本次运行开始时从官方同步 config-<版本>（官方基线 + 强制写回必需项）
+        description: "Sync kernel config from upstream before compiling"
+        required: false
+        default: true
+        type: boolean
+
 env:  # 工作流级环境变量，所有 job 共享
   TZ: Etc/UTC  # 统一时区为 UTC，保证日志与产物时间戳一致
 
@@ -139,6 +145,17 @@ jobs:  # 任务集合
     steps:  # 编译流程步骤
       - name: Checkout  # 步骤1：拉取本仓库代码
         uses: actions/checkout@v6  # 官方 actions/checkout@v6
+
+      - name: Sync kernel config from upstream  # 官方基线 + 强制写回 Klipper 必需项（幂等，可反复执行）
+        id: sync
+        if: ${{ github.event_name == 'schedule' || inputs.sync_config == true }}
+        run: |
+          set -o pipefail
+          ver="$(echo "${{ matrix.kernel_version }}" | awk -F. '{print $1"."$2}')"
+          bash "kernel-config/tools/sync-from-upstream.sh" "${ver}"
+          echo "---- 同步产生的变更 ----"
+          git --no-pager diff --stat -- "kernel-config/" || true
+
 
       - name: Initialize the build environment  # 步骤2：初始化编译环境
         id: init  # 步骤 id=init
@@ -271,6 +288,21 @@ jobs:  # 任务集合
           ccache_clear: ${{ inputs.ccache_clear }}  # 是否清空 ccache
           docker_hostpath: /builder  # 把宿主 /builder 挂进容器作工作目录（扩展存储）
           docker_image: ophub/armbian-${{ inputs.docker_image }}:arm64  # 编译容器镜像 ophub/armbian-发行版:arm64
+
+      - name: Commit refreshed kernel config  # 把同步结果记录进仓库（仅在确实变化时提交）
+        if: ${{ steps.sync.outcome == 'success' && !cancelled() }}
+        run: |
+          set -o pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kernel-config/
+          if git diff --cached --quiet; then
+            echo "配置无变化，跳过提交。"
+          else
+            git commit -m "chore(kernel): sync kernel config from upstream [skip ci] $(date -u +%F)"
+            git push
+            echo "已提交并推送配置更新。"
+          fi
 
       - name: Upload Kernel to Release  # 步骤7：把编译产物上传到 Release
         uses: ophub/upload-to-releases@main  # ophub 上传 Action
