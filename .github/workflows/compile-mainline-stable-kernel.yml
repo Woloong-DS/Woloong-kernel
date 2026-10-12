@@ -1,240 +1,287 @@
-#==========================================================================
-# Description: Compile mainline stable kernel
-# Copyright (C) 2021 https://github.com/unifreq/openwrt_packit
-# Copyright (C) 2021 https://github.com/ophub/kernel
-#==========================================================================
+#==========================================================================  # 【注解说明】本文件全部注解写在对应行行尾：# ▶ 顶层项，# ▸ 子项
+# Description: Compile mainline stable kernel  # 工作流描述：编译主线稳定内核
+# Copyright (C) 2021 https://github.com/unifreq/openwrt_packit  # 版权：https://github.com/unifreq/openwrt_packit
+# Copyright (C) 2021 https://github.com/ophub/kernel  # 版权：https://github.com/ophub/kernel
+#==========================================================================  # 文件头分隔线结束
 
-name: Compile mainline stable kernel
+name: Compile mainline stable kernel  # 工作流名称，显示在 Actions 页面列表
 
-on:
-  repository_dispatch:
-  workflow_dispatch:
-    inputs:
-      kernel_source:
-        description: "Select the kernel source"
-        required: false
-        default: "ophub"
-        type: choice
-        options:
-          - unifreq
-          - ophub
-      kernel_version:
-        description: "Select kernel version"
-        required: false
-        default: "6.18.y"
-        type: choice
-        options:
-          - all
-          - 5.10.y
-          - 5.15.y
-          - 6.1.y
-          - 6.6.y
-          - 6.12.y
-          - 6.18.y
-      kernel_auto:
-        description: "Auto use the latest kernel"
-        required: false
-        default: true
-        type: boolean
-      delete_source:
-        description: "Delete source after compilation"
-        required: false
-        default: true
-        type: boolean
-      kernel_package:
-        description: "Select compile package list"
-        required: false
-        default: "all"
-        type: choice
-        options:
-          - all
-          - dtbs
-      kernel_toolchain:
-        description: "Select the compilation toolchain"
-        required: false
-        default: "gcc"
-        type: choice
-        options:
-          - clang
-          - gcc
-          - gcc-15.3
-          - gcc-15.2
-          - gcc-14.3
-          - gcc-14.2
-      ccache_clear:
-        description: "Set whether to clear the cache"
-        required: false
-        default: false
-        type: boolean
-      docker_image:
-        description: "Select Armbian docker image"
-        required: false
-        default: "resolute"
-        type: choice
-        options:
-          - trixie
-          - bookworm
-          - resolute
-          - noble
-      kernel_sign:
-        description: "Set the kernel custom signature"
-        required: false
-        default: "-ophub"
-        type: choice
-        options:
-          - -ophub
-          - -happy-new-year
-          - -dragon-boat-festival
-          - -mid-autumn-festival
-          - -happy-national-day
-          - -merry-christmas
-          - -spring-plowing
-          - -summer-growing
-          - -autumn-harvesting
-          - -winter-storing
-          - -yourname
-      kernel_config:
-        description: "Set the path of kernel .config"
-        required: false
-        default: "kernel-config/release/stable"
-        type: choice
-        options:
-          - kernel-config/release/stable
-          - false
+on:  # 触发器：定义工作流在哪些事件下运行
+  repository_dispatch:  # 允许外部仓库/Webhook 通过 GitHub API 触发（上游内核更新后自动编译）
+  workflow_dispatch:  # 允许在 Actions 页面手动 Run workflow 并填写 inputs
+    inputs:  # 手动触发的输入参数（每项对应表单一个控件）
+      kernel_source:  # 内核源码仓库：ophub/linux-x.y 或 unifreq/linux-x.y
+        description: "Select the kernel source"  # 参数说明文字
+        required: false  # false=非必填（已有默认值）
+        default: "ophub"  # 默认 ophub
+        type: choice  # choice=下拉单选
+        options:  # 可选值列表
+          - unifreq  # 使用 unifreq 源码仓库
+          - ophub  # 使用 ophub 源码仓库（默认）
+      kernel_version:  # 要编译的内核版本（y=该主线稳定分支）
+        description: "Select kernel version"  # 参数说明文字
+        required: false  # 非必填
+        default: "6.18.y"  # 默认 6.18.y
+        type: choice  # choice=下拉单选
+        options:  # 可选版本列表
+          - all  # all=编译全部版本，setup 阶段展开为构建矩阵
+          - 5.10.y  # Linux 5.10 稳定分支
+          - 5.15.y  # Linux 5.15 稳定分支
+          - 6.1.y  # Linux 6.1 稳定分支
+          - 6.6.y  # Linux 6.6 稳定分支
+          - 6.12.y  # Linux 6.12 稳定分支
+          - 6.18.y  # Linux 6.18 稳定分支（默认）
+      kernel_auto:  # 是否自动使用该主线最新小版本
+        description: "Auto use the latest kernel"  # 参数说明
+        required: false  # 非必填
+        default: true  # true=自动使用最新
+        type: boolean  # boolean=布尔开关
+      delete_source:  # 编译完成后是否删除源码
+        description: "Delete source after compilation"  # 参数说明
+        required: false  # 非必填
+        default: true  # true=编译后删除源码以省磁盘
+        type: boolean  # boolean=布尔开关
+      kernel_package:  # 编译产物范围
+        description: "Select compile package list"  # 参数说明
+        required: false  # 非必填
+        default: "all"  # 默认 all
+        type: choice  # choice=下拉单选
+        options:  # 可选范围
+          - all  # all=内核镜像+模块+设备树
+          - dtbs  # dtbs=只编译设备树
+      kernel_toolchain:  # 编译工具链
+        description: "Select the compilation toolchain"  # 参数说明
+        required: false  # 非必填
+        default: "gcc"  # 默认发行版自带 GCC
+        type: choice  # choice=下拉单选
+        options:  # 可选工具链
+          - clang  # Clang/LLVM 工具链
+          - gcc  # 发行版默认 GCC
+          - gcc-15.3  # 指定 GCC 15.3
+          - gcc-15.2  # 指定 GCC 15.2
+          - gcc-14.3  # 指定 GCC 14.3
+          - gcc-14.2  # 指定 GCC 14.2
+      ccache_clear:  # 编译前是否清空 ccache
+        description: "Set whether to clear the cache"  # 参数说明
+        required: false  # 非必填
+        default: false  # false=保留缓存加速编译
+        type: boolean  # boolean=布尔开关
+      docker_image:  # 编译所用 Armbian 容器镜像发行版
+        description: "Select Armbian docker image"  # 参数说明
+        required: false  # 非必填
+        default: "bookworm"  # 默认 bookworm（Debian 12）
+        type: choice  # choice=下拉单选
+        options:  # 可选发行版
+          - trixie  # Debian 13
+          - bookworm  # Debian 12
+          - resolute  # Ubuntu 26.04
+          - noble  # Ubuntu 24.04 LTS
+      kernel_sign:  # 内核自定义签名后缀（拼在版本号后）
+        description: "Set the kernel custom signature"  # 参数说明
+        required: false  # 非必填
+        default: "-Woloong"  # 默认签名，产物形如 6.18.55-Woloong
+        type: choice  # choice=下拉单选
+        options:  # 可选签名
+          - -Woloong  # Woloong 默认签名
+          - -happy-new-year  # 节日主题：新年
+          - -dragon-boat-festival  # 节日主题：端午
+          - -mid-autumn-festival  # 节日主题：中秋
+          - -happy-national-day  # 节日主题：国庆
+          - -merry-christmas  # 节日主题：圣诞
+          - -spring-plowing  # 节气主题：春耕
+          - -summer-growing  # 节气主题：夏长
+          - -autumn-harvesting  # 节气主题：秋收
+          - -winter-storing  # 节气主题：冬藏
+          - -yourname  # 占位符，改成自己的名字
+      kernel_config:  # 自定义内核 .config 的路径
+        description: "Set the path of kernel .config"  # 参数说明
+        required: false  # 非必填
+        default: "kernel-config/release/stable"  # 默认路径
+        type: choice  # choice=下拉单选
+        options:  # 可选来源
+          - kernel-config/release/stable  # 使用仓库内该目录下的 .config
+          - false  # 不使用自定义配置，走内核默认/自动配置
 
-env:
-  TZ: Etc/UTC
+env:  # 工作流级环境变量，所有 job 共享
+  TZ: Etc/UTC  # 统一时区为 UTC，保证日志与产物时间戳一致
 
-jobs:
-  setup:
-    runs-on: ubuntu-26.04-arm
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Set build matrix based on kernel_version input
-        id: set-matrix
-        run: |
-          if [[ "${{ inputs.kernel_version }}" == "all" ]]; then
-            MATRIX='{"include":[{"kernel_version":"5.10.y"},{"kernel_version":"5.15.y"},{"kernel_version":"6.1.y"},{"kernel_version":"6.6.y"},{"kernel_version":"6.12.y"},{"kernel_version":"6.18.y"}]}'
-          else
-            MATRIX='{"include":[{"kernel_version":"${{ inputs.kernel_version }}"}]}'
-          fi
-          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
+jobs:  # 任务集合
+  setup:  # 第一个 job：根据 kernel_version 生成构建矩阵
+    runs-on: ubuntu-26.04-arm  # 运行在 GitHub 托管的 ARM64 runner（Ubuntu 26.04）
+    outputs:  # 向后续 job 暴露输出值
+      matrix: ${{ steps.set-matrix.outputs.matrix }}  # 输出 JSON 字符串，作为 build 的构建矩阵
+    steps:  # 步骤列表开始
+      - name: Set build matrix based on kernel_version input  # 步骤显示名称
+        id: set-matrix  # 步骤唯一标识，供 outputs 与表达式引用
+        run: |  # 执行多行 shell 脚本
+          if [[ "${{ inputs.kernel_version }}" == "all" ]]; then  # 判断是否选择了 all（编译全部版本）
+            MATRIX='{"include":[{"kernel_version":"5.10.y"},{"kernel_version":"5.15.y"},{"kernel_version":"6.1.y"},{"kernel_version":"6.6.y"},{"kernel_version":"6.12.y"},{"kernel_version":"6.18.y"}]}'  # 构造 5.10.y~6.18.y 六版本矩阵 JSON
+          else  # 否则只编译所选单一版本
+            MATRIX='{"include":[{"kernel_version":"${{ inputs.kernel_version }}"}]}'  # 构造只含所选版本的矩阵 JSON
+          fi  # 结束 if 判断
+          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"  # 写入 GITHUB_OUTPUT，供 build 的 strategy.matrix 读取
 
-  build:
-    needs: setup
-    runs-on: ubuntu-26.04-arm
-    if: ${{ github.event.repository.owner.id == github.event.sender.id }}
-    permissions:
-      contents: write
+  build:  # 第二个 job：真正执行内核编译
+    needs: setup  # 依赖 setup，需其完成后运行
+    runs-on: ubuntu-26.04-arm  # 同样使用 ARM64 runner（本地 arm64 编译）
+    if: ${{ github.event.repository.owner.id == github.event.sender.id }}  # 安全限制：仅仓库所有者本人触发时才执行，防止 fork 滥用
+    permissions:  # 声明 GITHUB_TOKEN 权限范围
+      contents: write  # 允许写仓库内容（创建/更新 Release）
 
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    strategy:  # 构建策略
+      fail-fast: false  # false=某版本失败不取消其他版本
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}  # 由 setup 输出的 JSON 动态展开为并行任务
 
-    name: compile-kernel-${{ matrix.kernel_version }}
+    name: compile-kernel-${{ matrix.kernel_version }}  # 任务显示名，附带内核版本号
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+    steps:  # 编译流程步骤
+      - name: Checkout  # 步骤1：拉取本仓库代码
+        uses: actions/checkout@v6  # 官方 actions/checkout@v6
 
-      - name: Initialize the build environment
-        id: init
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          docker rmi -f $(docker images -q) 2>/dev/null || true
-          [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
-          sudo swapoff -a
-          sudo rm -f /swapfile /mnt/swapfile
-          sudo apt-get -y update
-          sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-          sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2604-build-armbian-depends)
-          sudo systemctl daemon-reload
-          #sudo apt-get -y full-upgrade
-          sudo apt-get -y autoremove --purge
-          sudo apt-get clean
-          sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
-          sudo rm -rf ~/{.cargo,.dotnet,.rustup}
-          sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
-          sudo ntpdate ntp.ubuntu.com 0.pool.ntp.org || true
-          sudo timedatectl set-ntp true
-          date -u
-          timedatectl status || true
-          echo "status=success" >> ${GITHUB_OUTPUT}
+      - name: Initialize the build environment  # 步骤2：初始化编译环境
+        id: init  # 步骤 id=init
+        env:  # 该步骤的环境变量
+          DEBIAN_FRONTEND: noninteractive  # apt 非交互模式，避免卡在确认提示
+        run: |  # 初始化脚本
+          docker rmi -f $(docker images -q) 2>/dev/null || true  # 清空已有 docker 镜像，释放磁盘
+          [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"  # 删除预装工具目录 AGENT_TOOLSDIRECTORY 腾出空间
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null  # 删除 dotnet/android 等大型预装组件
+          sudo swapoff -a  # 关闭 swap，避免编译时内存交换抖动
+          sudo rm -f /swapfile /mnt/swapfile  # 删除 swap 文件
+          sudo apt-get -y update  # 更新 apt 源索引
+          sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true  # 卸载编译用不到的大型软件包
+          sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2604-build-armbian-depends)  # 安装 ophub 提供的 Armbian 编译依赖
+          sudo systemctl daemon-reload  # 重新加载 systemd 单元配置
+          #sudo apt-get -y full-upgrade  # 原文件注释：整机升级（默认不执行）
+          sudo apt-get -y autoremove --purge  # 清理已无依赖的软件包
+          sudo apt-get clean  # 清理 apt 缓存
+          sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}  # 删除 root 的 .bashrc/.profile 中 NVM_DIR、skel 行
+          sudo rm -rf ~/{.cargo,.dotnet,.rustup}  # 删除 cargo/dotnet/rustup 缓存目录
+          sudo timedatectl set-timezone "${TZ:-Etc/UTC}"  # 设置时区为 UTC（取 TZ，缺省 Etc/UTC）
+          sudo ntpdate ntp.ubuntu.com 0.pool.ntp.org || true  # 用 ntpdate 校时（失败不中断）
+          sudo timedatectl set-ntp true  # 启用 systemd 自动时间同步
+          date -u  # 打印当前 UTC 时间
+          timedatectl status || true  # 打印时间同步状态
+          echo "status=success" >> ${GITHUB_OUTPUT}  # 输出 status=success 供后续 if 引用
 
-      - name: Create virtual disk for extended storage
-        id: disk
-        run: |
-          # Get available space in exact GB
-          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
-          root_size=$(( root_avail - 4 ))
+      - name: Create virtual disk for extended storage  # 步骤3：创建虚拟磁盘扩展存储（编译内核需大磁盘）
+        id: disk  # 步骤 id=disk（供编译步骤判断磁盘就绪）
+        run: |  # 创建并挂载扩展存储
+          # Get available space in exact GB  # 读取根分区可用空间（GB）
+          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')  # 计算可用作虚拟磁盘的大小（预留 4G）
+          root_size=$(( root_avail - 4 ))  # 空间不足则报错终止
           [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space on /: ${root_avail}G available"; exit 1; }
 
-          sudo truncate -s "${root_size}"G /root.img
-          build_dev=$(sudo losetup --find --show /root.img)
-          echo "Using /: ${root_size}G"
+          sudo truncate -s "${root_size}"G /root.img  # 创建 /root.img 稀疏镜像
+          build_dev=$(sudo losetup --find --show /root.img)  # losetup 把镜像映射为块设备
+          echo "Using /: ${root_size}G"  # 打印实际使用空间
 
-          sudo mkfs.xfs -f -i sparse=0 -b size=4096 "${build_dev}"
-          sudo mkdir -p /builder
-          sudo mount "${build_dev}" /builder
-          sudo chown -R runner:runner /builder
-          df -Th
-          echo "status=success" >> ${GITHUB_OUTPUT}
+          sudo mkfs.xfs -f -i sparse=0 -b size=4096 "${build_dev}"  # 格式化为 xfs（关闭稀疏、块大小 4096）
+          sudo mkdir -p /builder  # 创建挂载点 /builder
+          sudo mount "${build_dev}" /builder  # 挂载到 /builder 作为编译工作目录
+          sudo chown -R runner:runner /builder  # 把 /builder 属主改为 runner
+          df -Th  # 查看磁盘使用情况
+          echo "status=success" >> ${GITHUB_OUTPUT}  # 输出 status=success 供编译步骤 if 引用
 
-      - name: Get kernel source commit hash
-        id: kernelhash
-        run: |
-          # Get the latest source hash from the kernel repository
-          api_url="https://api.github.com/repos/${{ inputs.kernel_source }}/linux-${{ matrix.kernel_version }}/git/ref/heads/main"
+      - name: Get kernel source commit hash  # 步骤4：获取内核源码最新 commit 哈希（用作 ccache key）
+        id: kernelhash  # 步骤 id=kernelhash
+        run: |  # 调用 GitHub API 获取源码哈希
+          # Get the latest source hash from the kernel repository  # 原注释：从内核仓库获取最新源码哈希
+          api_url="https://api.github.com/repos/${{ inputs.kernel_source }}/linux-${{ matrix.kernel_version }}/git/ref/heads/main"  # 拼接 API 地址：源码仓库+内核版本+分支 main
           source_hash=$(curl -fsSL -m 20 \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               ${api_url} |
               jq -r '.object.sha'
-          )
-          [[ -z "${source_hash}" || "${source_hash}" == "null" ]] && source_hash="${{ github.sha }}"
-          echo "source_hash=${source_hash}" >> ${GITHUB_ENV}
-          echo "status=success" >> ${GITHUB_OUTPUT}
+          )  # 结束命令替换：192-196 为多行续行 curl（JSON 头 + Token 鉴权 + jq 取 .object.sha），行尾是 \ 或 |，无法加注解
+          [[ -z "${source_hash}" || "${source_hash}" == "null" ]] && source_hash="${{ github.sha }}"  # 取不到 sha 时回退为当前工作流 github.sha
+          echo "source_hash=${source_hash}" >> ${GITHUB_ENV}  # 写入 GITHUB_ENV，后续用 env.source_hash 引用
+          echo "status=success" >> ${GITHUB_OUTPUT}  # 输出 status=success
 
-      - name: Cache ccache
-        uses: actions/cache@v5
-        with:
-          path: /builder/ccache
-          key: kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-${{ env.source_hash }}
-          restore-keys: |
+      - name: Cache ccache  # 步骤5：缓存 ccache 加速重复编译
+        uses: actions/cache@v5  # 官方缓存 Action v5
+        with:  # 缓存参数
+          path: /builder/ccache  # 缓存目录 /builder/ccache
+          key: kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-${{ env.source_hash }}  # 缓存 key：工具链+内核版本+源码哈希（源码更新自动换 key）
+          restore-keys: |  # 精确 key 未命中时按此前缀恢复旧缓存
             kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-
 
-      - name: Compile the kernel [ ${{ matrix.kernel_version }} ]
-        uses: ophub/amlogic-s9xxx-armbian@main
-        if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}
-        with:
-          build_target: kernel
-          kernel_source: ${{ inputs.kernel_source }}
-          kernel_version: ${{ matrix.kernel_version }}
-          kernel_auto: ${{ inputs.kernel_auto }}
-          delete_source: ${{ inputs.delete_source }}
-          kernel_package: ${{ inputs.kernel_package }}
-          kernel_toolchain: ${{ inputs.kernel_toolchain }}
-          kernel_sign: ${{ inputs.kernel_sign }}
-          kernel_config: ${{ inputs.kernel_config }}
-          ccache_clear: ${{ inputs.ccache_clear }}
-          docker_hostpath: /builder
-          docker_image: ophub/armbian-${{ inputs.docker_image }}:arm64
+      - name: Verify kernel config [ ${{ matrix.kernel_version }} ]  # 步骤5.5：编译前校验 Klipper 必需项（CAN/gs_usb 等）
+        run: |
+          set -o pipefail
+          kc="${{ inputs.kernel_config }}"
+          if [[ -z "${kc}" || "${kc}" == "false" ]]; then
+            echo "kernel_config=${kc}（未启用自定义配置），跳过必需项校验。"
+            exit 0
+          fi
+          req="kernel-config/required-options.conf"   # 必需项清单（由本仓库维护）
+          if [[ ! -f "${req}" ]]; then
+            echo "::warning::未找到 ${req}，无法校验 Klipper 必需项。"
+            exit 0
+          fi
+          ver="$(echo "${{ matrix.kernel_version }}" | awk -F. '{print $1"."$2}')"
+          cfg="${kc}/config-${ver}"
+          scope="$(awk -F'=' '/^SCOPE=/{print $2; exit}' "${req}" | tr -d ' ')"
+          in_scope=no
+          for s in ${scope}; do [[ "${s}" == "${ver}" ]] && in_scope=yes; done
+          echo "目标内核版本: ${ver} | 配置模板: ${cfg} | 强制校验范围(SCOPE): ${scope:-无} | 本版本在范围内: ${in_scope}"
+          if [[ ! -f "${cfg}" ]]; then
+            if [[ "${in_scope}" == "yes" ]]; then
+              echo "::error::缺少 ${cfg}，编译会静默改用官方配置，Klipper 功能无法保证。请先准备该版本配置模板。"
+              exit 1
+            fi
+            echo "::warning::缺少 ${cfg}，本次将使用官方配置（不在强制校验范围内）。"
+            exit 0
+          fi
+          missing=0
+          while IFS= read -r line; do
+            [[ -z "${line}" || "${line}" == \#* || "${line}" == SCOPE=* ]] && continue
+            name="${line%%=*}"
+            if grep -q "^${name}=" "${cfg}"; then
+              echo "OK    ${name}=$(grep -m1 "^${name}=" "${cfg}" | cut -d= -f2-)"
+            else
+              echo "缺失  ${line}"
+              missing=$((missing + 1))
+            fi
+          done < "${req}"
+          if [[ "${missing}" -gt 0 ]]; then
+            if [[ "${in_scope}" == "yes" ]]; then
+              echo "::error::${cfg} 缺少 ${missing} 个 Klipper 必需项（见上），已阻止编译。"
+              exit 1
+            fi
+            echo "::warning::${cfg} 缺少 ${missing} 个必需项（不在强制校验范围内，继续编译）。"
+          else
+            echo "全部必需项已启用，继续编译。"
+          fi
+      - name: Compile the kernel [ ${{ matrix.kernel_version }} ]  # 步骤6：编译内核（核心步骤）
+        uses: ophub/amlogic-s9xxx-armbian@main  # 调用 ophub 内核编译 Action，核心逻辑在该仓库
+        if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}  # 仅当前面磁盘步骤成功且未被取消时执行
+        with:  # 传给编译 Action 的输入参数
+          build_target: kernel  # kernel=只编译内核，不打包系统镜像
+          kernel_source: ${{ inputs.kernel_source }}  # 内核源码仓库
+          kernel_version: ${{ matrix.kernel_version }}  # 内核版本（来自矩阵）
+          kernel_auto: ${{ inputs.kernel_auto }}  # 是否自动使用最新小版本
+          delete_source: ${{ inputs.delete_source }}  # 编译完成后是否删除源码
+          kernel_package: ${{ inputs.kernel_package }}  # 打包范围（all/dtbs）
+          kernel_toolchain: ${{ inputs.kernel_toolchain }}  # 编译工具链
+          kernel_sign: ${{ inputs.kernel_sign }}  # 内核签名后缀
+          kernel_config: ${{ inputs.kernel_config }}  # 自定义 .config 路径（false=不启用）
+          ccache_clear: ${{ inputs.ccache_clear }}  # 是否清空 ccache
+          docker_hostpath: /builder  # 把宿主 /builder 挂进容器作工作目录（扩展存储）
+          docker_image: ophub/armbian-${{ inputs.docker_image }}:arm64  # 编译容器镜像 ophub/armbian-发行版:arm64
 
-      - name: Upload Kernel to Release
-        uses: ophub/upload-to-releases@main
-        if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
-        with:
-          tag: kernel_stable
-          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
-          allow_updates: true
-          remove_artifacts: false
-          replaces_artifacts: true
-          make_latest: true
-          gh_token: ${{ secrets.GITHUB_TOKEN }}
-          body: |
+      - name: Upload Kernel to Release  # 步骤7：把编译产物上传到 Release
+        uses: ophub/upload-to-releases@main  # ophub 上传 Action
+        if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}  # 仅当编译输出 PACKAGED_STATUS=success 且未取消时执行
+        with:  # 上传参数
+          tag: kernel_stable  # 固定发布到 kernel_stable 标签的 Release
+          artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*  # 上传编译 Action 输出目录下全部文件
+          allow_updates: true  # 允许更新已存在的 Release
+          remove_artifacts: false  # 不删除 Actions 运行中的中间产物
+          replaces_artifacts: true  # 同名产物直接替换
+          make_latest: true  # 标记为最新 Release
+          gh_token: ${{ secrets.GITHUB_TOKEN }}  # 使用内置 GITHUB_TOKEN
+          body: |  # Release 说明正文（其下多行内容原样展示，故不可加行尾注释）
             - These are Mainline `stable` kernels that provide support for `Armbian`, `OpenWrt` and `FnNAS`.
             - It works with most `Amlogic`, `Rockchip`, and `Allwinner` devices. For specific details, please refer to the instructions on the homepage of each system's repository.
 
