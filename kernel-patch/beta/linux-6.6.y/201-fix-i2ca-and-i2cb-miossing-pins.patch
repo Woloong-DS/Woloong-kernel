@@ -1,0 +1,31 @@
+From 9b2af930c2377459c3e67aa45c928acefb89d227 Mon Sep 17 00:00:00 2001
+From: xxx <68696949+xxx@users.noreply.github.com>
+Date: Wed, 21 May 2025 12:19:23 +0800
+Subject: [PATCH] fix i2cA and i2cB miossing pins
+
+---
+ arch/arm64/boot/dts/amlogic/meson-gxbb.dtsi | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/amlogic/meson-gxbb.dtsi b/arch/arm64/boot/dts/amlogic/meson-gxbb.dtsi
+index ed00e67e6..460a21a4f 100644
+--- a/arch/arm64/boot/dts/amlogic/meson-gxbb.dtsi
++++ b/arch/arm64/boot/dts/amlogic/meson-gxbb.dtsi
+@@ -339,6 +339,8 @@
+ 
+ &i2c_A {
+ 	clocks = <&clkc CLKID_I2C>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c_a_pins>;
+ };
+ 
+ &i2c_AO {
+@@ -347,6 +349,8 @@
+ 
+ &i2c_B {
+ 	clocks = <&clkc CLKID_I2C>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c_b_pins>;
+ };
+ 
+ &i2c_C {

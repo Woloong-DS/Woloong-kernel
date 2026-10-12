@@ -1,0 +1,30 @@
+From 50f2d2574a541855ed5bf14dc9835de424fa3b60 Mon Sep 17 00:00:00 2001
+From: xxx <68696949+xxx@users.noreply.github.com>
+Date: Wed, 21 May 2025 12:08:39 +0800
+Subject: [PATCH] hack: drm/meson: venc: add support for WS7.9
+
+---
+ drivers/gpu/drm/meson/meson_venc.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/meson/meson_venc.c b/drivers/gpu/drm/meson/meson_venc.c
+index 559ab3b5e2..40d6a908b3 100644
+--- a/drivers/gpu/drm/meson/meson_venc.c
++++ b/drivers/gpu/drm/meson/meson_venc.c
+@@ -866,11 +866,13 @@ meson_venc_hdmi_supported_mode(const struct drm_display_mode *mode)
+ 			    DRM_MODE_FLAG_PVSYNC | DRM_MODE_FLAG_NVSYNC))
+ 		return MODE_BAD;
+ 
+-	/* support higher resolution than 1920x1080 */
+-	if (mode->hdisplay < 640 || mode->hdisplay > 2560)
++	/* support 384x1280 and 1280x384 for the waveshare 7.9"
++	 * as well, support 2560x1600 for 2K resolution
++	 */
++	if (mode->hdisplay < 384 || mode->hdisplay > 2560)
+ 		return MODE_BAD_HVALUE;
+ 
+-	if (mode->vdisplay < 480 || mode->vdisplay > 1600)
++	if (mode->vdisplay < 384 || mode->vdisplay > 1600)
+ 		return MODE_BAD_VVALUE;
+ 
+ 	return MODE_OK;
