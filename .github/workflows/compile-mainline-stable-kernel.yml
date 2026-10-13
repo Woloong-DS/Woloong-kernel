@@ -122,10 +122,10 @@ jobs:  # 任务集合
       - name: Set build matrix based on kernel_version input  # 步骤显示名称
         id: set-matrix  # 步骤唯一标识，供 outputs 与表达式引用
         run: |  # 执行多行 shell 脚本
-          if [[ "${{ inputs.kernel_version }}" == "all" ]]; then  # 判断是否选择了 all（编译全部版本）
+          if [[ "${{ inputs.kernel_version || '6.18.y' }}" == "all" ]]; then  # 判断是否选择了 all（编译全部版本）
             MATRIX='{"include":[{"kernel_version":"5.10.y"},{"kernel_version":"5.15.y"},{"kernel_version":"6.1.y"},{"kernel_version":"6.6.y"},{"kernel_version":"6.12.y"},{"kernel_version":"6.18.y"}]}'  # 构造 5.10.y~6.18.y 六版本矩阵 JSON
           else  # 否则只编译所选单一版本
-            MATRIX='{"include":[{"kernel_version":"${{ inputs.kernel_version }}"}]}'  # 构造只含所选版本的矩阵 JSON
+            MATRIX='{"include":[{"kernel_version":"${{ inputs.kernel_version || '6.18.y' }}"}]}'  # 构造只含所选版本的矩阵 JSON
           fi  # 结束 if 判断
           echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"  # 写入 GITHUB_OUTPUT，供 build 的 strategy.matrix 读取
 
@@ -206,7 +206,7 @@ jobs:  # 任务集合
         id: kernelhash  # 步骤 id=kernelhash
         run: |  # 调用 GitHub API 获取源码哈希
           # Get the latest source hash from the kernel repository  # 原注释：从内核仓库获取最新源码哈希
-          api_url="https://api.github.com/repos/${{ inputs.kernel_source }}/linux-${{ matrix.kernel_version }}/git/ref/heads/main"  # 拼接 API 地址：源码仓库+内核版本+分支 main
+          api_url="https://api.github.com/repos/${{ inputs.kernel_source || 'ophub' }}/linux-${{ matrix.kernel_version }}/git/ref/heads/main"  # 拼接 API 地址：源码仓库+内核版本+分支 main
           source_hash=$(curl -fsSL -m 20 \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -221,14 +221,14 @@ jobs:  # 任务集合
         uses: actions/cache@v5  # 官方缓存 Action v5
         with:  # 缓存参数
           path: /builder/ccache  # 缓存目录 /builder/ccache
-          key: kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-${{ env.source_hash }}  # 缓存 key：工具链+内核版本+源码哈希（源码更新自动换 key）
+          key: kernel-stable-${{ inputs.kernel_toolchain || 'gcc' }}-${{ matrix.kernel_version }}-${{ env.source_hash }}  # 缓存 key：工具链+内核版本+源码哈希（源码更新自动换 key）
           restore-keys: |  # 精确 key 未命中时按此前缀恢复旧缓存
-            kernel-stable-${{ inputs.kernel_toolchain }}-${{ matrix.kernel_version }}-
+            kernel-stable-${{ inputs.kernel_toolchain || 'gcc' }}-${{ matrix.kernel_version }}-
 
       - name: Verify kernel config [ ${{ matrix.kernel_version }} ]  # 步骤5.5：编译前校验 Klipper 必需项（CAN/gs_usb 等）
         run: |
           set -o pipefail
-          kc="${{ inputs.kernel_config }}"
+          kc="${{ inputs.kernel_config || 'kernel-config/release/stable' }}"
           if [[ -z "${kc}" || "${kc}" == "false" ]]; then
             echo "kernel_config=${kc}（未启用自定义配置），跳过必需项校验。"
             exit 0
@@ -277,17 +277,17 @@ jobs:  # 任务集合
         if: ${{ steps.disk.outputs.status == 'success' && !cancelled() }}  # 仅当前面磁盘步骤成功且未被取消时执行
         with:  # 传给编译 Action 的输入参数
           build_target: kernel  # kernel=只编译内核，不打包系统镜像
-          kernel_source: ${{ inputs.kernel_source }}  # 内核源码仓库
+          kernel_source: ${{ inputs.kernel_source || 'ophub' }}  # 内核源码仓库
           kernel_version: ${{ matrix.kernel_version }}  # 内核版本（来自矩阵）
-          kernel_auto: ${{ inputs.kernel_auto }}  # 是否自动使用最新小版本
-          delete_source: ${{ inputs.delete_source }}  # 编译完成后是否删除源码
-          kernel_package: ${{ inputs.kernel_package }}  # 打包范围（all/dtbs）
-          kernel_toolchain: ${{ inputs.kernel_toolchain }}  # 编译工具链
-          kernel_sign: ${{ inputs.kernel_sign }}  # 内核签名后缀
-          kernel_config: ${{ inputs.kernel_config }}  # 自定义 .config 路径（false=不启用）
-          ccache_clear: ${{ inputs.ccache_clear }}  # 是否清空 ccache
+          kernel_auto: ${{ inputs.kernel_auto || 'true' }}  # 是否自动使用最新小版本
+          delete_source: ${{ inputs.delete_source || 'true' }}  # 编译完成后是否删除源码
+          kernel_package: ${{ inputs.kernel_package || 'all' }}  # 打包范围（all/dtbs）
+          kernel_toolchain: ${{ inputs.kernel_toolchain || 'gcc' }}  # 编译工具链
+          kernel_sign: ${{ inputs.kernel_sign || '-Woloong' }}  # 内核签名后缀
+          kernel_config: ${{ inputs.kernel_config || 'kernel-config/release/stable' }}  # 自定义 .config 路径（false=不启用）
+          ccache_clear: ${{ inputs.ccache_clear || 'false' }}  # 是否清空 ccache
           docker_hostpath: /builder  # 把宿主 /builder 挂进容器作工作目录（扩展存储）
-          docker_image: ophub/armbian-${{ inputs.docker_image }}:arm64  # 编译容器镜像 ophub/armbian-发行版:arm64
+          docker_image: ophub/armbian-${{ inputs.docker_image || 'bookworm' }}:arm64  # 编译容器镜像 ophub/armbian-发行版:arm64
 
       - name: Commit refreshed kernel config  # 把同步结果记录进仓库（仅在确实变化时提交）
         if: ${{ steps.sync.outcome == 'success' && !cancelled() }}
