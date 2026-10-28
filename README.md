@@ -1,14 +1,42 @@
-# Woloong Kernel
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Woloong-DS/Woloong-kiauh/main/docs/assets/Woloong_Logo.png" alt="Woloong" height="88">
+</p>
 
-[中文说明](README.md) | [English](README.en.md) | 上游项目：[ophub/kernel](https://github.com/ophub/kernel)
+<h1 align="center">Woloong Kernel</h1>
+
+<p align="center">
+  <b>Woloong 定制内核 · Klipper / CAN 驱动内置</b><br>
+  fork 自 ophub/kernel · 每月 1/16 日构建 · 版本号带 -Woloong
+</p>
+
+<p align="center">
+  <a href="https://github.com/Woloong-DS/Woloong-OS">Woloong-OS</a> ·
+  <a href="https://github.com/Woloong-DS/Woloong-amlogic-s9xxx-armbian">基础镜像</a> ·
+  <a href="https://github.com/ophub/kernel">上游 ophub/kernel</a> ·
+  <a href="README.en.md">English</a>
+</p>
+
+---
+
+## 这是什么
 
 本仓库是 **Woloong OS** 的定制内核构建仓库，fork 自 [ophub/kernel](https://github.com/ophub/kernel)。
-构建产物供 [Woloong-DS/Woloong-amlogic-s9xxx-armbian](https://github.com/Woloong-DS/Woloong-amlogic-s9xxx-armbian) 打系统镜像时下载，也可在已装机设备上通过 `armbian-update` 在线升级。
+构建产物供 [Woloong-amlogic-s9xxx-armbian](https://github.com/Woloong-DS/Woloong-amlogic-s9xxx-armbian) 打系统镜像时下载，也可在已装机上通过 `armbian-update` 在线升级。
 
 设计目标只有一句话：**既能持续接收官方内核更新，又不会在更新中丢掉自己的定制。**
 
+## 在 Woloong 栈中的位置
+
+| 层 | 仓库 | 职责 |
+|---|---|---|
+| 内核 | **Woloong-kernel**（本仓库） | 内核配置、驱动、`-Woloong` 签名 |
+| 基础镜像 | [Woloong-amlogic-s9xxx-armbian](https://github.com/Woloong-DS/Woloong-amlogic-s9xxx-armbian) | 在 Armbian 基础上产出可启动镜像 |
+| 产品层 | [Woloong-OS](https://github.com/Woloong-DS/Woloong-OS) | 离线包、软件栈、置备与验收 |
+| 运行时 | [Woloong-kiauh](https://github.com/Woloong-DS/Woloong-kiauh) | 安装/卸载/更新/体检 |
+
 ## 目录
 
+- [在 Woloong 栈中的位置](#在-woloong-栈中的位置)
 - [这个仓库做了什么](#这个仓库做了什么)
 - [构建产物与 Release](#构建产物与-release)
 - [目录结构](#目录结构)
