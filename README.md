@@ -32,7 +32,7 @@
 | 内核 | **Woloong-kernel**（本仓库） | 内核配置、驱动、`-Woloong` 签名 |
 | 基础镜像 | [Woloong-amlogic-s9xxx-armbian](https://github.com/Woloong-DS/Woloong-amlogic-s9xxx-armbian) | 在 Armbian 基础上产出可启动镜像 |
 | 产品层 | [Woloong-OS](https://github.com/Woloong-DS/Woloong-OS) | 离线包、软件栈、置备与验收 |
-| 运行时 | [Woloong-kiauh](https://github.com/Woloong-DS/Woloong-kiauh) | 安装/卸载/更新/体检 |
+| 运行时 | Woloong-kiauh（私有，随镜像提供） | 安装/卸载/更新/体检 |
 
 ## 目录
 
